@@ -1,45 +1,162 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>M-Pesa Simulator</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M-Pesa Login</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #f5f5f5, #eaf7ec);
+      color: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 420px;
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 30px 24px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 8px;
+      color: #0b7a3d;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #555;
+      margin-bottom: 22px;
+      font-size: 14px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #222;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d3d9d5;
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #0b7a3d;
+      box-shadow: 0 0 0 3px rgba(11, 122, 61, 0.12);
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      background: #0b7a3d;
+      color: #fff;
+      font-weight: 700;
+      font-size: 16px;
+      border-radius: 10px;
+      padding: 13px 16px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    button:hover {
+      background: #085d32;
+    }
+
+    .error {
+      min-height: 22px;
+      margin-top: 12px;
+      color: #b42318;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
 </head>
-
 <body>
+  <div class="container">
+    <h2>M-Pesa Login</h2>
+    <p class="subtitle">Enter your required details to continue to your M-Pesa account.</p>
 
-<h2>M-Pesa Simulator</h2>
+    <form id="mpesaLoginForm" novalidate>
+      <div class="field">
+        <label for="fullName">Full Name</label>
+        <input id="fullName" name="fullName" type="text" placeholder="Jane Doe" required />
+      </div>
 
-<h3>Balance: {{balance}}</h3>
+      <div class="field">
+        <label for="phone">Phone Number</label>
+        <input id="phone" name="phone" type="tel" placeholder="254712345678" pattern="[0-9]{10,13}" required />
+      </div>
 
-{% if message %}
-<p>{{message}}</p>
-{% endif %}
+      <div class="field">
+        <label for="idNumber">National ID / Passport</label>
+        <input id="idNumber" name="idNumber" type="text" placeholder="ID or passport number" required />
+      </div>
 
-<h3>Send Money</h3>
-<form action="/send" method="post">
-Phone: <input type="text" name="number"><br>
-Amount: <input type="number" name="amount"><br>
-<button type="submit">Send</button>
-</form>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="Enter your password" minlength="6" required />
+      </div>
 
-<h3>Deposit</h3>
-<form action="/deposit" method="post">
-Amount: <input type="number" name="amount"><br>
-<button type="submit">Deposit</button>
-</form>
+      <button type="submit">Login to M-Pesa</button>
+      <p id="errorMessage" class="error"></p>
+    </form>
+  </div>
 
-<h3>Withdraw</h3>
-<form action="/withdraw" method="post">
-Amount: <input type="number" name="amount"><br>
-<button type="submit">Withdraw</button>
-</form>
+  <script>
+    const form = document.getElementById('mpesaLoginForm');
+    const errorMessage = document.getElementById('errorMessage');
 
-<h3>Transaction History</h3>
-<ul>
-{% for item in history %}
-<li>{{item}}</li>
-{% endfor %}
-</ul>
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
 
+      const fullName = document.getElementById('fullName').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const idNumber = document.getElementById('idNumber').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!fullName || !phone || !idNumber || !password) {
+        errorMessage.textContent = 'Please fill in all required fields.';
+        return;
+      }
+
+      if (!/^[0-9]{10,13}$/.test(phone)) {
+        errorMessage.textContent = 'Please enter a valid phone number with digits only.';
+        return;
+      }
+
+      if (password.length < 6) {
+        errorMessage.textContent = 'Password must be at least 6 characters.';
+        return;
+      }
+
+      errorMessage.textContent = '';
+
+      // Front-end redirect for the demo flow.
+      // For a real production application, use the official Safaricom API / secure auth flow.
+      window.location.href = 'https://www.safaricom.co.ke/personal/m-pesa';
+    });
+  </script>
 </body>
 </html>
-  Node   Node   Node              Node    Node
