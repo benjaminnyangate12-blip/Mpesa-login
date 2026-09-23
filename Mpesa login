@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>M-Pesa Simulator</title>
+</head>
+
+<body>
+
+<h2>M-Pesa Simulator</h2>
+
+<h3>Balance: {{balance}}</h3>
+
+{% if message %}
+<p>{{message}}</p>
+{% endif %}
+
+<h3>Send Money</h3>
+<form action="/send" method="post">
+Phone: <input type="text" name="number"><br>
+Amount: <input type="number" name="amount"><br>
+<button type="submit">Send</button>
+</form>
+
+<h3>Deposit</h3>
+<form action="/deposit" method="post">
+Amount: <input type="number" name="amount"><br>
+<button type="submit">Deposit</button>
+</form>
+
+<h3>Withdraw</h3>
+<form action="/withdraw" method="post">
+Amount: <input type="number" name="amount"><br>
+<button type="submit">Withdraw</button>
+</form>
+
+<h3>Transaction History</h3>
+<ul>
+{% for item in history %}
+<li>{{item}}</li>
+{% endfor %}
+</ul>
+
+</body>
+</html>
+  Node   Node   Node              Node    Node
