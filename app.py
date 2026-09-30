@@ -10,65 +10,97 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# M-Pesa Credentials (Store these in .env file)
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'sandbox').lower()
 CONSUMER_KEY = os.getenv('CONSUMER_KEY', '')
 CONSUMER_SECRET = os.getenv('CONSUMER_SECRET', '')
-BUSINESS_SHORTCODE = os.getenv('BUSINESS_SHORTCODE', '174379')
+BUSINESS_SHORTCODE = os.getenv('BUSINESS_SHORTCODE', '')
 PASSKEY = os.getenv('PASSKEY', '')
-CALLBACK_URL = os.getenv('CALLBACK_URL', 'https://yourdomain.com/callback')
+CALLBACK_URL = os.getenv('CALLBACK_URL', '')
 
-# M-Pesa API URLs
+# Safaricom Daraja endpoints
 SANDBOX_AUTH_URL = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
 PRODUCTION_AUTH_URL = "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
-STK_PUSH_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+SANDBOX_STK_PUSH_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
 PRODUCTION_STK_PUSH_URL = "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+
+AUTH_URL = SANDBOX_AUTH_URL if ENVIRONMENT == 'sandbox' else PRODUCTION_AUTH_URL
+STK_PUSH_URL = SANDBOX_STK_PUSH_URL if ENVIRONMENT == 'sandbox' else PRODUCTION_STK_PUSH_URL
+
+
+def normalize_phone(phone):
+    phone = (phone or '').strip()
+    if not phone:
+        return ''
+    digits = ''.join(ch for ch in phone if ch.isdigit())
+    if digits.startswith('254'):
+        return digits
+    if digits.startswith('0'):
+        return '254' + digits[1:]
+    if digits.startswith('+254'):
+        return digits.replace('+', '')
+    return '254' + digits
 
 
 def get_access_token():
-    """Get OAuth access token from Safaricom"""
+    """Get OAuth token from Safaricom Daraja."""
+    if not CONSUMER_KEY or not CONSUMER_SECRET:
+        return None
+
     try:
-        response = requests.get(
-            SANDBOX_AUTH_URL,
-            auth=HTTPBasicAuth(CONSUMER_KEY, CONSUMER_SECRET)
-        )
-        return response.json().get('access_token')
+        response = requests.get(AUTH_URL, auth=HTTPBasicAuth(CONSUMER_KEY, CONSUMER_SECRET), timeout=30)
+        data = response.json()
+        if response.status_code != 200:
+            print(f"M-Pesa auth failed: {data}")
+            return None
+        return data.get('access_token')
     except Exception as e:
         print(f"Error getting access token: {e}")
         return None
 
 
 def initiate_stk_push(phone, amount):
-    """Initiate STK Push payment request"""
+    """Trigger Safaricom STK Push to the customer phone."""
+    if not BUSINESS_SHORTCODE or not PASSKEY or not CALLBACK_URL:
+        return {'error': 'Missing Safaricom config. Set BUSINESS_SHORTCODE, PASSKEY, CALLBACK_URL in .env.'}
+
+    access_token = get_access_token()
+    if not access_token:
+        return {'error': 'Failed to generate Safaricom access token. Check CONSUMER_KEY and CONSUMER_SECRET.'}
+
+    normalized_phone = normalize_phone(phone)
+    if not normalized_phone:
+        return {'error': 'Phone number is required.'}
+
     try:
-        access_token = get_access_token()
-        if not access_token:
-            return {'error': 'Failed to get access token'}
+        amount_value = int(float(amount))
+    except ValueError:
+        return {'error': 'Amount must be a number.'}
 
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        data_to_encode = BUSINESS_SHORTCODE + PASSKEY + timestamp
-        password = base64.b64encode(data_to_encode.encode()).decode('utf-8')
+    if amount_value <= 0:
+        return {'error': 'Amount must be greater than zero.'}
 
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
-        }
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    password = base64.b64encode(f"{BUSINESS_SHORTCODE}{PASSKEY}{timestamp}".encode()).decode('utf-8')
 
-        payload = {
-            "BusinessShortCode": BUSINESS_SHORTCODE,
-            "Password": password,
-            "Timestamp": timestamp,
-            "TransactionType": "CustomerPayBillOnline",
-            "Amount": int(amount),
-            "PartyA": phone,
-            "PartyB": BUSINESS_SHORTCODE,
-            "PhoneNumber": phone,
-            "CallBackURL": CALLBACK_URL,
-            "AccountReference": "MPesaLogin",
-            "TransactionDesc": "M-Pesa Payment"
-        }
+    payload = {
+        'BusinessShortCode': BUSINESS_SHORTCODE,
+        'Password': password,
+        'Timestamp': timestamp,
+        'TransactionType': 'CustomerPayBillOnline',
+        'Amount': amount_value,
+        'PartyA': normalized_phone,
+        'PartyB': BUSINESS_SHORTCODE,
+        'PhoneNumber': normalized_phone,
+        'CallBackURL': CALLBACK_URL,
+        'AccountReference': 'MpesaLogin',
+        'TransactionDesc': 'Mpesa Login Payment'
+    }
 
-        response = requests.post(STK_PUSH_URL, json=payload, headers=headers)
-        return response.json()
+    try:
+        response = requests.post(STK_PUSH_URL, json=payload, headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'}, timeout=30)
+        data = response.json()
+        print(f"STK push response: {data}")
+        return data
     except Exception as e:
         print(f"Error initiating STK push: {e}")
         return {'error': str(e)}
@@ -81,21 +113,17 @@ def home():
 
 @app.route('/login', methods=['POST'])
 def login():
-    action = request.form.get('action', 'validate')
     phone = (request.form.get('phone') or '').strip()
     amount = (request.form.get('amount') or '').strip()
-    pin = (request.form.get('pin') or '').strip()
 
-    # Back button - return to first step
-    if action == 'back':
-        return render_template('login.html', phone=phone, amount=amount, show_pin=False)
-
-    # Validate phone and amount
     if not phone or not amount:
         return render_template('login.html', error='Please enter your phone number and amount.', show_pin=False)
 
-    if not phone.isdigit() or len(phone) < 10 or len(phone) > 13:
-        return render_template('login.html', error='Please enter a valid phone number (10-13 digits).', phone=phone, amount=amount, show_pin=False)
+    if not phone.isdigit() and not phone.startswith('+'):
+        return render_template('login.html', error='Please enter a valid phone number.', phone=phone, amount=amount, show_pin=False)
+
+    if len(phone.replace('+', '')) < 10 or len(phone.replace('+', '')) > 13:
+        return render_template('login.html', error='Please enter a valid phone number.', phone=phone, amount=amount, show_pin=False)
 
     try:
         amount_value = float(amount)
@@ -105,72 +133,45 @@ def login():
     if amount_value <= 0:
         return render_template('login.html', error='Amount must be greater than zero.', phone=phone, amount=amount, show_pin=False)
 
-    # If only validating phone/amount, show PIN section
-    if action == 'validate':
-        return render_template('login.html', success='Enter your M-Pesa PIN to continue.', phone=phone, amount=amount, show_pin=True)
+    result = initiate_stk_push(phone, amount)
 
-    # Confirm PIN and process payment
-    if action == 'confirm':
-        if not pin:
-            return render_template('login.html', error='Please enter your M-Pesa PIN.', phone=phone, amount=amount, pin=pin, show_pin=True)
+    if 'error' in result:
+        return render_template('login.html', error=result['error'], phone=phone, amount=amount, show_pin=False)
 
-        if len(pin) < 4 or not pin.isdigit():
-            return render_template('login.html', error='Please enter a valid 4-digit M-Pesa PIN.', phone=phone, amount=amount, pin=pin, show_pin=True)
+    response_code = str(result.get('ResponseCode', ''))
+    if response_code == '0':
+        return render_template(
+            'login.html',
+            success=f'M-Pesa payment prompt sent to {normalize_phone(phone)}. Please authorize it on your phone.',
+            phone=phone,
+            amount=amount,
+            show_pin=False
+        )
 
-        # Initiate STK Push to M-Pesa
-        result = initiate_stk_push(phone, amount)
-
-        if 'error' in result:
-            return render_template('login.html', error=f'Payment initiation failed: {result["error"]}', phone=phone, amount=amount, show_pin=False)
-
-        # Check STK Push response
-        if result.get('ResponseCode') == '0':
-            success_msg = f'Payment prompt sent to {phone}. Please check your phone and enter your PIN on the M-Pesa popup.'
-            return render_template('login.html', success=success_msg, phone=phone, amount=amount, show_pin=False)
-        else:
-            error_msg = result.get('ResponseDescription', 'Failed to initiate payment')
-            return render_template('login.html', error=error_msg, phone=phone, amount=amount, show_pin=False)
-
-    return render_template('login.html', show_pin=False)
+    error_message = result.get('errorMessage') or result.get('ResponseDescription') or 'Failed to initiate M-Pesa payment.'
+    return render_template('login.html', error=error_message, phone=phone, amount=amount, show_pin=False)
 
 
 @app.route('/callback', methods=['POST'])
 def callback():
-    """Handle Safaricom callback"""
+    """Safaricom sends payment status to this endpoint."""
     try:
-        data = request.get_json()
-        # Process payment result
+        data = request.get_json(silent=True) or {}
         body = data.get('Body', {})
         stk_callback = body.get('stkCallback', {})
         result_code = stk_callback.get('ResultCode')
 
         if result_code == 0:
-            # Payment successful
             callback_metadata = stk_callback.get('CallbackMetadata', {})
-            items = {item['Name']: item['Value'] for item in callback_metadata.get('Item', [])}
-            
-            print(f"Payment successful! Details: {items}")
-            # Save to database here
-            
+            items = {item.get('Name'): item.get('Value') for item in callback_metadata.get('Item', [])}
+            print(f"Payment successful: {items}")
         else:
-            # Payment failed
-            print(f"Payment failed with code: {result_code}")
+            print(f"Payment failed: {result_code}")
 
         return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'})
     except Exception as e:
         print(f"Callback error: {e}")
         return jsonify({'ResultCode': 1, 'ResultDesc': 'Error processing callback'})
-
-
-@app.route('/payment-status', methods=['GET'])
-def payment_status():
-    """Check payment status (optional endpoint)"""
-    try:
-        phone = request.args.get('phone')
-        # Query database for payment status
-        return jsonify({'status': 'pending', 'phone': phone})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
 
 
 if __name__ == '__main__':
